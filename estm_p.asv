@@ -1,0 +1,105 @@
+clc
+clear
+close
+addpath('functions')
+
+total_worker = 50;
+total_task = 500;
+total_label = 5;
+
+p_min = 0.001;
+p_max = 0.999;
+q_min = 0.501;
+q_max = 0.999;
+
+sampling_list = 0.1:0.1:1.0;
+max_iter = 10;
+
+% generate worker reliability
+worker_reliability = (p_max - p_min) * rand(total_worker, 1) + p_min;
+
+% generate task difficulty
+task_difficulty = (q_max - q_min) * rand(total_task, 1) + q_min;
+mse = zeros(length(sampling_list), max_iter);
+
+for sampling_idx = 1 : size(sampling_list, 2)
+    [observed_matrix, ground_truth, most_confusing_answer] = generate_data(worker_reliability, task_difficulty, total_label);
+
+    for times = 1:max_iter
+        S = sampling_list(sampling_idx);
+        Y_obs = zeros(total_worker, total_task);
+        for i = 1 : total_worker
+            for j = 1 : total_task
+                if rand() < S
+                    Y_obs(i, j) = observed_matrix(i, j);
+                end
+            end
+        end
+% ================================ TopTwo1 ================================
+        [N, M] = size(Y_obs);
+        K = max(Y_obs, [], 'all');
+        S = nnz(Y_obs) / numel(Y_obs);
+
+        shifted_matrix= zeros(K, N, M);
+        us = zeros(K-1, N);
+
+        for k = 1 : K-1
+            observed_matrix_bin = Y_obs;
+            observed_matrix_bin((1 <= Y_obs) & (Y_obs <= k)) = -1;
+            observed_matrix_bin(Y_obs>k) = 1;
+            observed_matrix_bin = observed_matrix_bin - S * (K-2*k)/K;
+
+            [U, ~, ~] = svd(observed_matrix_bin);
+            if sum(U(:, 1)) >0
+                us(k, :) = U(:, 1);
+            else
+                us(k, :) = -U(:, 1);
+            end
+
+            shifted_matrix(k, :, :) = observed_matrix_bin;
+        end
+
+        avg_u = mean(us, 1);
+        avg_u = max(min(avg_u, 1), 0);
+
+        w = zeros(M, K+1);
+        for k = 1 : K-1
+            w(:, k+1) = squeeze(shifted_matrix(k, :, :))'*avg_u' / (2*S);
+        end
+
+        del_w = zeros(M, K);
+        for k = 1 : K
+            del_w(:, k) = w(:, k+1) - w(:, k);
+        end
+
+        [g, h] = top2(-del_w);
+        % ================================ TopTwo2 ================================
+        p = sum(Y_obs == repmat(g', N, 1) | Y_obs == repmat(h', N, 1), 2);
+        worker_degree = sum(Y_obs > 0, 2);
+
+        p = p ./ worker_degree;
+        p = p - 2/K;
+        p = p / (1-2/K);
+
+        p = max(min(p, 0.999), 0.001);
+        norm_p = norm(p);
+        mse(sampling_idx, times) = norm(p - worker_reliability);
+        
+        q = ones(M, 1) / K;
+        for j = 1 : M
+            q(j) = q(j) - (del_w(j, g(j)) / norm_p);
+        end
+        q = max(min(q, 0.999), 0.501);
+    end
+end
+
+c = [0.4940 0.1840 0.5560];
+
+plot(total_worker * sampling_list , mean(mse, 2), 'Color', c, 'LineStyle', '-', 'Marker', 'o', 'LineWidth', 1.5,'MarkerSize',5);
+hold on
+xforfill = [total_worker * sampling_list, total_worker * fliplr(sampling_list)];
+yforfill = [mean(mse, 2) - std(mse, 0, 2); flipud(mean(mse, 2) + std(mse, 0, 2))];
+ylim([0
+fill(xforfill, yforfill, c,'FaceAlpha',0.1,'EdgeAlpha', 0,'EdgeColor','r');
+xlabel("Avg. # of queries per task");
+ylabel("Mean Square Error");
