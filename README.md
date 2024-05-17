@@ -1,4 +1,4 @@
-# TopTwo
+# Recovering Top-Two Answers and Confusion Probability in Multi-Choice Crowdsourcing
 This repository contains code and the real world dataset for our ICML paper: "Recovering Top-Two Answers and Confusion Probability in Multi-Choice Crowdsourcing".
 
 ## Introduction
@@ -36,3 +36,15 @@ python main.py --lr 0.1 --type top2 --model vgg
 ```
 
 ## Citation
+
+```BibTeX
+If you find that this project helps your research, please consider citing some of the following paper:
+@inproceedings{jeong2023recovering,
+  title={Recovering top-two answers and confusion probability in multi-choice crowdsourcing},
+  author={Jeong, Hyeonsu and Chung, Hye Won},
+  booktitle={International Conference on Machine Learning},
+  pages={14836--14868},
+  year={2023},
+  organization={PMLR}
+}
+```
